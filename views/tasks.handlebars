@@ -1,0 +1,38 @@
+<div class="container">
+   
+
+  {{#if allTasks.length}}
+    <table class="striped">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Description</th>
+          <th>Duration (mins)</th>
+          <th>Created</th>
+          <th>ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each allTasks}}
+          <tr>
+            <td>{{this.userId.username}}</td>
+            <td>{{this.description}}</td>
+            <td>{{this.duration}}</td>
+            <td>{{this.createdAt}}</td>
+            <td>{{this._id}}</td>
+          </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  {{else}}
+    {{> emptyTable}}
+  {{/if}}
+
+  <button class="waves-effect waves-light btn full-size" {{#if usersArrayIsEmpty}}disabled{{/if}}>
+    <a href="/task/create">Create a Task</a>
+  </button>
+
+  {{#if usersArrayIsEmpty}}
+    <p class="text-center danger">Please add at least 1 user to create new task</p>
+  {{/if}}
+</div>

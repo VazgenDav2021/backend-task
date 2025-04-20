@@ -1,0 +1,27 @@
+<div class="container">
+  <table class="striped">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Creation Date</th>
+        <th>ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each users}}
+      <tr>
+        <td>
+          <a href="/users/{{_id}}" target="_blank">
+            {{this.username}}
+          </a>
+        </td>
+        <td>{{this.createdAt}}</td>
+        <td>{{this._id}}</td>
+      </tr>
+      {{/each}}
+
+    </tbody>
+  </table>
+
+  <a class="waves-effect waves-light btn full-size" href="/users/create">Create a User</a>
+</div>
