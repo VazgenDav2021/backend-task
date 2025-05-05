@@ -61,34 +61,83 @@ const getUserLogs = async (req, res) => {
     const { _id } = req.params;
     const { from, to, limit } = req.query;
 
-    const user = await User.findById(_id);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    let log = [...user.log];
+    const matchStage = { _id: new mongoose.Types.ObjectId(_id) };
+    const filter = {};
 
     if (from) {
-      const fromDate = new Date(from);
-      log = log.filter((e) => new Date(e.date) >= fromDate);
+      filter.date = { ...filter.date, $gte: new Date(from) };
     }
 
     if (to) {
-      const toDate = new Date(to);
-      log = log.filter((e) => new Date(e.date) <= toDate);
+      filter.date = { ...filter.date, $lte: new Date(to) };
     }
+
+    const projectStage = {
+      username: 1,
+      log: {
+        $filter: {
+          input: "$log",
+          as: "item",
+          cond: {
+            $and: [
+              filter.date?.$gte
+                ? { $gte: ["$$item.date", filter.date.$gte] }
+                : {},
+              filter.date?.$lte
+                ? { $lte: ["$$item.date", filter.date.$lte] }
+                : {},
+            ],
+          },
+        },
+      },
+    };
 
     if (limit) {
-      log = log.slice(0, parseInt(limit));
+      projectStage.log = {
+        $slice: [
+          {
+            $filter: {
+              input: "$log",
+              as: "item",
+              cond: {
+                $and: [
+                  filter.date?.$gte
+                    ? { $gte: ["$$item.date", filter.date.$gte] }
+                    : {},
+                  filter.date?.$lte
+                    ? { $lte: ["$$item.date", filter.date.$lte] }
+                    : {},
+                ],
+              },
+            },
+          },
+          parseInt(limit),
+        ],
+      };
     }
 
+    const userLogs = await User.aggregate([
+      { $match: matchStage },
+      { $project: projectStage },
+    ]);
+
+    
+
+    if (!userLogs.length)
+      return res.status(404).json({ error: "User not found" });
+
+    const user = userLogs[0];
+    const log = user.log.map((e) => ({
+      description: e.description,
+      duration: e.duration,
+      date: new Date(e.date).toDateString(),
+    }));
+
     res.json({
-      _id: user._id,
+      _id,
       username: user.username,
       count: log.length,
-      log: log.map((e) => ({
-        description: e.description,
-        duration: e.duration,
-        date: new Date(e.date).toDateString(),
-      })),
+      log,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
