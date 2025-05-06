@@ -4,7 +4,13 @@ const User = require("../models/User");
 const createUser = async (req, res) => {
   try {
     const { username } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ error: "Username is required" });
+    }
+
     const existingUser = await User.findOne({ username });
+    
 
     if (existingUser) {
       return res.status(400).json({ error: "Username already exists" });
