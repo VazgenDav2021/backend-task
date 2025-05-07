@@ -10,7 +10,6 @@ const createUser = async (req, res) => {
     }
 
     const existingUser = await User.findOne({ username });
-    
 
     if (existingUser) {
       return res.status(400).json({ error: "Username already exists" });
@@ -28,9 +27,14 @@ const addExercise = async (req, res) => {
   try {
     const { _id } = req.params;
     const { description, duration, date } = req.body;
-    const transformedDuration = Math.abs(parseInt(duration || 0));
 
-    if (isNaN(transformedDuration) || transformedDuration <= 0) {
+    if (duration === undefined || duration === null || duration === "") {
+      return res.status(400).json({ error: "Duration is required" });
+    }
+
+    const transformedDuration = Number(duration);
+
+    if (isNaN(transformedDuration) || transformedDuration < 0) {
       return res.status(400).json({ error: "Invalid duration" });
     }
 
@@ -67,84 +71,44 @@ const getUserLogs = async (req, res) => {
     const { _id } = req.params;
     const { from, to, limit } = req.query;
 
-    const matchStage = { _id: new mongoose.Types.ObjectId(_id) };
-    const filter = {};
+    if (!mongoose.Types.ObjectId.isValid(_id)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const user = await User.findById(_id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    let logs = user.log.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     if (from) {
-      filter.date = { ...filter.date, $gte: new Date(from) };
+      const fromDate = new Date(from);
+      logs = logs.filter((entry) => new Date(entry.date) >= fromDate);
     }
 
     if (to) {
-      filter.date = { ...filter.date, $lte: new Date(to) };
+      const toDate = new Date(to);
+      logs = logs.filter((entry) => new Date(entry.date) <= toDate);
     }
 
-    const projectStage = {
-      username: 1,
-      log: {
-        $filter: {
-          input: "$log",
-          as: "item",
-          cond: {
-            $and: [
-              filter.date?.$gte
-                ? { $gte: ["$$item.date", filter.date.$gte] }
-                : {},
-              filter.date?.$lte
-                ? { $lte: ["$$item.date", filter.date.$lte] }
-                : {},
-            ],
-          },
-        },
-      },
-    };
+    const count = logs.length;
 
     if (limit) {
-      projectStage.log = {
-        $slice: [
-          {
-            $filter: {
-              input: "$log",
-              as: "item",
-              cond: {
-                $and: [
-                  filter.date?.$gte
-                    ? { $gte: ["$$item.date", filter.date.$gte] }
-                    : {},
-                  filter.date?.$lte
-                    ? { $lte: ["$$item.date", filter.date.$lte] }
-                    : {},
-                ],
-              },
-            },
-          },
-          parseInt(limit),
-        ],
-      };
+      logs = logs.slice(0, Number(limit));
     }
 
-    const userLogs = await User.aggregate([
-      { $match: matchStage },
-      { $project: projectStage },
-    ]);
-
-    
-
-    if (!userLogs.length)
-      return res.status(404).json({ error: "User not found" });
-
-    const user = userLogs[0];
-    const log = user.log.map((e) => ({
-      description: e.description,
-      duration: e.duration,
-      date: new Date(e.date).toDateString(),
-    }));
+    logs = logs.sort((a, b) => a.description.localeCompare(b.description));
 
     res.json({
-      _id,
+      _id: user._id,
       username: user.username,
-      count: log.length,
-      log,
+      count,
+      log: logs.map((entry) => ({
+        description: entry.description,
+        duration: entry.duration,
+        date: new Date(entry.date).toDateString(),
+      })),
     });
+    
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
