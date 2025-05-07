@@ -75,41 +75,58 @@ const getUserLogs = async (req, res) => {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    const user = await User.findById(_id);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    let logs = user.log.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    if (from) {
-      const fromDate = new Date(from);
-      logs = logs.filter((entry) => new Date(entry.date) >= fromDate);
+    const user = await User.findById(_id).select("username");
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    if (to) {
-      const toDate = new Date(to);
-      logs = logs.filter((entry) => new Date(entry.date) <= toDate);
+    const totalCountResult = await User.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(_id) } },
+      { $project: { count: { $size: "$log" } } },
+    ]);
+    const totalCount = totalCountResult[0]?.count || 0;
+
+    const pipeline = [
+      { $match: { _id: new mongoose.Types.ObjectId(_id) } },
+      { $unwind: "$log" },
+    ];
+
+    const dateFilter = {};
+    if (from) dateFilter.$gte = new Date(from);
+    if (to) dateFilter.$lte = new Date(to);
+    if (Object.keys(dateFilter).length > 0) {
+      pipeline.push({ $match: { "log.date": dateFilter } });
     }
 
-    const count = logs.length;
+    pipeline.push({ $sort: { "log.description": 1 } });
 
     if (limit) {
-      logs = logs.slice(0, Number(limit));
+      pipeline.push({ $limit: Number(limit) });
     }
 
-    logs = logs.sort((a, b) => a.description.localeCompare(b.description));
+    pipeline.push({
+      $project: {
+        _id: 0,
+        description: "$log.description",
+        duration: "$log.duration",
+        date: "$log.date",
+      },
+    });
+
+    const logs = await User.aggregate(pipeline);
 
     res.json({
       _id: user._id,
       username: user.username,
-      count,
+      count: totalCount,
       log: logs.map((entry) => ({
         description: entry.description,
         duration: entry.duration,
-        date: new Date(entry.date).toDateString(),
+        date: new Date(entry.date).toDateString(), // форматируем в JS
       })),
     });
-    
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
